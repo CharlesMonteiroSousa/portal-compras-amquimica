@@ -1,0 +1,101 @@
+.view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+  animation: fade-in 0.25s ease;
+}
+
+.toast {
+  animation: slide-in 0.3s ease;
+}
+
+.drop-zone.dragover {
+  border-color: #1e4478;
+  background: #eef3fa;
+}
+
+.login-bg {
+  background: radial-gradient(circle at 20% 10%, #24508d 0%, #0f2747 55%, #0a1a31 100%);
+}
+
+:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+#track-body td {
+  vertical-align: middle;
+}
+
+#app-header nav {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #app-header nav button {
+    white-space: nowrap;
+  }
+
+  #view-setor .overflow-x-auto table {
+    min-width: 900px;
+  }
+
+  #toasts {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  #toasts > div {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
