@@ -137,9 +137,27 @@ begin
   end if;
 
   if v_profile.perfil = 'MON' then
-    if (to_jsonb(new) - array['status', 'pedido_totvs'])
-       is distinct from (to_jsonb(old) - array['status', 'pedido_totvs']) then
-      raise exception 'Compradores só podem atualizar status e pedido TOTVS';
+    if (to_jsonb(new) - array[
+         'status', 'pedido_totvs', 'cancelado', 'motivo_exclusao',
+         'cancelado_por', 'data_cancelamento'
+       ])
+       is distinct from (to_jsonb(old) - array[
+         'status', 'pedido_totvs', 'cancelado', 'motivo_exclusao',
+         'cancelado_por', 'data_cancelamento'
+       ]) then
+      raise exception 'Compradores só podem atualizar status, pedido TOTVS ou cancelar requisições';
+    end if;
+    if (new.cancelado, new.motivo_exclusao, new.cancelado_por, new.data_cancelamento)
+       is distinct from
+       (old.cancelado, old.motivo_exclusao, old.cancelado_por, old.data_cancelamento) then
+      if coalesce(old.cancelado, false)
+         or new.cancelado is distinct from true
+         or nullif(trim(new.motivo_exclusao), '') is null
+         or new.cancelado_por is distinct from v_profile.nome
+         or new.data_cancelamento is null then
+        raise exception 'Dados de exclusão inválidos';
+      end if;
+      new.data_cancelamento := now();
     end if;
     if new.status not in ('Pendente', 'Bloqueado por alçada', 'Concluído') then
       raise exception 'Status inválido';
