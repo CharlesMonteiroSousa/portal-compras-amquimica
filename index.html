@@ -385,6 +385,81 @@
 
 </main>
 
+<main id="admin-main" class="hidden max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
+  <section>
+    <div class="mb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div>
+        <h2 class="text-2xl font-bold text-navy-900">Administração de Usuários</h2>
+        <p class="text-slate-500 text-sm">Consulte as contas e cadastre usuários MON ou PF.</p>
+      </div>
+      <button id="admin-refresh-btn" type="button" class="bg-navy-800 hover:bg-navy-900 text-white text-sm font-semibold rounded-lg px-4 py-2 transition">
+        <i class="fa-solid fa-rotate mr-1"></i>Atualizar lista
+      </button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h3 class="font-semibold text-navy-900 mb-4"><i class="fa-solid fa-user-plus mr-2"></i>Cadastrar usuário</h3>
+      <form id="admin-create-form" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-end">
+        <div>
+          <label for="admin-new-name" class="block text-sm font-medium mb-1">Nome</label>
+          <input id="admin-new-name" type="text" required maxlength="100" autocomplete="name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
+        </div>
+        <div>
+          <label for="admin-new-email" class="block text-sm font-medium mb-1">Gmail / e-mail</label>
+          <input id="admin-new-email" type="email" required autocomplete="email" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
+        </div>
+        <div>
+          <label for="admin-new-password" class="block text-sm font-medium mb-1">Senha inicial</label>
+          <input id="admin-new-password" type="password" required minlength="8" autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
+        </div>
+        <div>
+          <label for="admin-new-role" class="block text-sm font-medium mb-1">Perfil</label>
+          <select id="admin-new-role" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy-600">
+            <option value="MON">MON · Comprador</option>
+            <option value="PF">PF · Ponto focal</option>
+          </select>
+        </div>
+        <div id="admin-sector-field" class="hidden">
+          <label for="admin-new-sector" class="block text-sm font-medium mb-1">Setor</label>
+          <select id="admin-new-sector" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy-600">
+            <option value="">Selecione...</option>
+            <option value="Embalagem">Embalagem</option>
+            <option value="Química">Química</option>
+          </select>
+        </div>
+        <div class="md:col-span-2 xl:col-span-5">
+          <button id="admin-create-btn" type="submit" class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold rounded-lg px-5 py-2.5 text-sm transition">
+            <i class="fa-solid fa-user-plus mr-1"></i>Criar conta
+          </button>
+        </div>
+      </form>
+      <p class="text-xs text-slate-500 mt-3">A senha inicial será definida pelo administrador; compartilhe-a com segurança.</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 class="font-semibold text-navy-900">Usuários cadastrados</h3>
+        <span id="admin-user-count" class="text-xs bg-navy-50 text-navy-700 font-semibold px-2 py-1 rounded-full">0</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold">Nome</th>
+              <th class="text-left px-4 py-3 font-semibold">E-mail</th>
+              <th class="text-left px-4 py-3 font-semibold">Perfil</th>
+              <th class="text-left px-4 py-3 font-semibold">Setor</th>
+              <th class="text-left px-4 py-3 font-semibold">Criado em</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <p id="admin-users-empty" class="hidden p-8 text-center text-sm text-slate-400">Nenhum usuário cadastrado.</p>
+    </div>
+  </section>
+</main>
+
 <footer class="text-center text-xs text-slate-400 py-6 border-t border-slate-200 bg-white mt-auto">
   AM QUÍMICA · Portal Interno de Compras · Supabase Realtime & Database · 
   <button id="reset-btn" type="button" class="underline hover:text-slate-600">Recarregar do Supabase</button>

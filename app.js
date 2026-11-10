@@ -24,8 +24,9 @@
       .single();
 
     if (error) throw error;
-    if (!data || !data.nome || (data.perfil !== 'MON' && data.perfil !== 'PF') ||
-        (data.perfil === 'PF' && !data.setor) || (data.perfil === 'MON' && data.setor)) {
+    if (!data || !data.nome || !['ADMIN', 'MON', 'PF'].includes(data.perfil) ||
+        (data.perfil === 'PF' && !['Embalagem', 'Química'].includes(data.setor)) ||
+        (data.perfil !== 'PF' && data.setor)) {
       throw new Error('Perfil de acesso inválido ou incompleto.');
     }
 
@@ -808,22 +809,129 @@
     }
   });
 
+  async function loadAdminUsers() {
+    if (!currentUser || currentUser.perfil !== 'ADMIN') return;
+
+    var body = $('admin-users-body');
+    body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Carregando usuários...</td></tr>';
+    $('admin-users-empty').classList.add('hidden');
+
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('admin-users', {
+        body: { action: 'list' }
+      });
+      if (error) throw error;
+      if (!data || !Array.isArray(data.users)) throw new Error('Resposta inválida da função administrativa.');
+
+      $('admin-user-count').textContent = data.users.length;
+      $('admin-users-empty').classList.toggle('hidden', data.users.length > 0);
+      body.innerHTML = data.users.map(function (user) {
+        var role = user.perfil === 'ADMIN' ? 'ADMIN · Administrador' :
+          user.perfil === 'MON' ? 'MON · Comprador' :
+          user.perfil === 'PF' ? 'PF · Ponto focal' : 'Sem perfil';
+        var createdAt = user.created_at ? new Date(user.created_at).toLocaleDateString('pt-BR') : '—';
+        return '<tr>' +
+          '<td class="px-4 py-3 font-medium">' + esc(user.nome || '—') + '</td>' +
+          '<td class="px-4 py-3">' + esc(user.email || '—') + '</td>' +
+          '<td class="px-4 py-3">' + esc(role) + '</td>' +
+          '<td class="px-4 py-3">' + esc(user.setor || '—') + '</td>' +
+          '<td class="px-4 py-3 whitespace-nowrap">' + esc(createdAt) + '</td>' +
+          '</tr>';
+      }).join('');
+    } catch (error) {
+      console.error('Não foi possível carregar os usuários administrativos:', error);
+      body.innerHTML = '';
+      toast('Falha ao carregar usuários: ' + await getAdminFunctionError(error), 'error');
+    }
+  }
+
+  async function getAdminFunctionError(error) {
+    if (error && error.context && typeof error.context.clone === 'function') {
+      try {
+        var responseBody = await error.context.clone().json();
+        if (responseBody && typeof responseBody.error === 'string') return responseBody.error;
+      } catch (parseError) {
+        console.error('Não foi possível ler o erro da função administrativa:', parseError);
+      }
+    }
+    return error && error.message ? error.message : 'Confira se a Edge Function admin-users foi implantada.';
+  }
+
+  function updateAdminSectorField() {
+    var isPf = $('admin-new-role').value === 'PF';
+    $('admin-sector-field').classList.toggle('hidden', !isPf);
+    $('admin-new-sector').required = isPf;
+    if (!isPf) $('admin-new-sector').value = '';
+  }
+
+  $('admin-new-role').addEventListener('change', updateAdminSectorField);
+  $('admin-refresh-btn').addEventListener('click', loadAdminUsers);
+  $('admin-create-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!currentUser || currentUser.perfil !== 'ADMIN') {
+      toast('Apenas o administrador pode cadastrar usuários.', 'error');
+      return;
+    }
+    if (!e.currentTarget.checkValidity()) {
+      e.currentTarget.reportValidity();
+      return;
+    }
+
+    var submitButton = $('admin-create-btn');
+    submitButton.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('admin-users', {
+        body: {
+          action: 'create',
+          nome: $('admin-new-name').value.trim(),
+          email: $('admin-new-email').value.trim().toLowerCase(),
+          password: $('admin-new-password').value,
+          perfil: $('admin-new-role').value,
+          setor: $('admin-new-role').value === 'PF' ? $('admin-new-sector').value : null
+        }
+      });
+      if (error) throw error;
+      if (!data || !data.success) throw new Error('A função administrativa não confirmou o cadastro.');
+
+      $('admin-create-form').reset();
+      updateAdminSectorField();
+      toast('Usuário criado com sucesso.', 'success');
+      await loadAdminUsers();
+    } catch (error) {
+      console.error('Não foi possível criar o usuário:', error);
+      toast(await getAdminFunctionError(error), 'error');
+    } finally {
+      $('admin-new-password').value = '';
+      submitButton.disabled = false;
+    }
+  });
+
   function enterApp(u) {
     currentUser = u;
     $('login-screen').classList.add('hidden');
     $('app-header').classList.remove('hidden');
-    $('app-main').classList.remove('hidden');
 
     $('user-avatar').textContent = u.nome.charAt(0);
     $('user-name').textContent = u.nome;
-    $('user-role').textContent = u.perfil === 'MON' ? 'MON · Comprador' : 'PF · ' + u.setor;
+    $('user-role').textContent = u.perfil === 'ADMIN' ? 'ADMIN · Administrador' :
+      u.perfil === 'MON' ? 'MON · Comprador' : 'PF · ' + u.setor;
 
-    if (u.perfil === 'PF') {
-      $('pontofocal').value = pfLabel(u);
-      $('setor').value = u.setor;
+    var isAdmin = u.perfil === 'ADMIN';
+    $('nav-tabs').classList.toggle('hidden', isAdmin);
+    $('app-main').classList.toggle('hidden', isAdmin);
+    $('admin-main').classList.toggle('hidden', !isAdmin);
+    $('reset-btn').classList.toggle('hidden', isAdmin);
+
+    if (isAdmin) {
+      loadAdminUsers();
+    } else {
+      if (u.perfil === 'PF') {
+        $('pontofocal').value = pfLabel(u);
+        $('setor').value = u.setor;
+      }
+      switchTab('main');
+      carregarDadosSupabase();
     }
-    switchTab('main');
-    carregarDadosSupabase();
     toast('Bem-vindo(a), ' + u.nome + '!', 'success');
   }
 
@@ -835,6 +943,14 @@
     resetForm();
     $('app-header').classList.add('hidden');
     $('app-main').classList.add('hidden');
+    $('admin-main').classList.add('hidden');
+    $('nav-tabs').classList.remove('hidden');
+    $('reset-btn').classList.remove('hidden');
+    $('admin-create-form').reset();
+    $('admin-users-body').innerHTML = '';
+    $('admin-user-count').textContent = '0';
+    $('admin-users-empty').classList.add('hidden');
+    updateAdminSectorField();
     $('login-screen').classList.remove('hidden');
   }
 

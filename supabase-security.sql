@@ -4,17 +4,28 @@
 -- To find UUIDs for profile rows, run: select id, email from auth.users;
 -- Example: insert into public.profiles (id, nome, perfil, setor)
 --          values ('AUTH-USER-UUID', 'Nome', 'PF', 'Química');
+-- Promote the first administrator only from the SQL Editor:
+-- insert into public.profiles (id, nome, perfil, setor)
+-- select id, 'Administrador', 'ADMIN', null from auth.users
+-- where lower(email) = lower('admin@empresa.com')
+-- on conflict (id) do update set perfil = 'ADMIN', setor = null;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   nome text not null,
-  perfil text not null check (perfil in ('MON', 'PF')),
-  setor text,
-  constraint profiles_role_sector_check check (
-    (perfil = 'MON' and setor is null) or
-    (perfil = 'PF' and setor in ('Embalagem', 'Química'))
-  )
+  perfil text not null,
+  setor text
 );
+
+alter table public.profiles drop constraint if exists profiles_perfil_check;
+alter table public.profiles drop constraint if exists profiles_role_sector_check;
+alter table public.profiles
+  add constraint profiles_perfil_check check (perfil in ('ADMIN', 'MON', 'PF'));
+alter table public.profiles
+  add constraint profiles_role_sector_check check (
+    (perfil in ('ADMIN', 'MON') and setor is null) or
+    (perfil = 'PF' and setor in ('Embalagem', 'Química'))
+  );
 
 alter table public.profiles enable row level security;
 revoke all on public.profiles from anon, authenticated;
