@@ -30,14 +30,14 @@
 
       <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
         <h2 class="text-lg font-bold text-navy-900 mb-1">Acesso ao sistema</h2>
-        <p class="text-sm text-slate-500 mb-5">Entre com seu usuário e senha para continuar.</p>
+        <p class="text-sm text-slate-500 mb-5">Entre com seu e-mail e senha para continuar.</p>
 
         <form id="login-form" novalidate class="space-y-4">
           <div>
-            <label for="login-user" class="block text-sm font-medium mb-1">Usuário</label>
+            <label for="login-user" class="block text-sm font-medium mb-1">E-mail</label>
             <div class="relative">
-              <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-              <input id="login-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Seu nome de usuário" class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
+              <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <input id="login-user" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required placeholder="seu.email@empresa.com" class="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
             </div>
           </div>
 
@@ -45,7 +45,7 @@
             <label for="login-pass" class="block text-sm font-medium mb-1">Senha</label>
             <div class="relative">
               <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-              <input id="login-pass" type="password" autocomplete="current-password" placeholder="Sua senha" class="w-full rounded-lg border border-slate-300 pl-9 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
+              <input id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="Sua senha" class="w-full rounded-lg border border-slate-300 pl-9 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-600">
               <button type="button" id="toggle-pass" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-navy-700" aria-label="Mostrar ou ocultar senha">
                 <i id="toggle-pass-icon" class="fa-solid fa-eye"></i>
               </button>

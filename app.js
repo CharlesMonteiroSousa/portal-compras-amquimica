@@ -4,28 +4,39 @@
   // SUPABASE CONFIG & CLIENT
   const SUPABASE_URL = 'https://gadnzexvcdtzxatysktn.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_6D3RGeNdk_YzTzBwVTnCrg_J4n_8xvR';
-  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     global: { headers: { apikey: SUPABASE_KEY } }
-  });
+  }) : null;
 
   var ST_PEND = 'Pendente';
   var ST_TOTVS = 'Bloqueado por alçada';
   var ST_DONE = 'Concluído';
   var URG_ORDER = { 'Alta': 0, 'Média': 1, 'Baixa': 2 };
 
-  var USERS = [
-    { id: 'charles',   nome: 'Charles',   perfil: 'MON', setor: null, senha: 'Ch@rles#2026!' },
-    { id: 'nicole',    nome: 'Nicole',    perfil: 'MON', setor: null, senha: 'N1cole*AM2026' },
-    { id: 'viviane',   nome: 'Viviane',   perfil: 'PF',  setor: 'Embalagem', senha: 'V1v1@ne#Emb26' },
-    { id: 'gabriela',  nome: 'Gabriela',  perfil: 'PF',  setor: 'Química', senha: 'G@br1ela#Qui26' },
-    { id: 'paula',     nome: 'Paula',     perfil: 'PF',  setor: 'Química', senha: 'P@ula*Qui2026' },
-    { id: 'gilcelane', nome: 'Gilcelane', perfil: 'PF',  setor: 'Química', senha: 'G1lc3lan3#Qui26' },
-    { id: 'brenda',    nome: 'Brenda',    perfil: 'PF',  setor: 'Química', senha: 'Br3nd@*Qui26' }
-  ];
   var currentUser = null;
 
   function pfLabel(u) { return u.nome; }
-  function findUser(id) { return USERS.find(function (u) { return u.id === id; }) || null; }
+  async function loadProfile(authUser) {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('id, nome, perfil, setor')
+      .eq('id', authUser.id)
+      .single();
+
+    if (error) throw error;
+    if (!data || !data.nome || (data.perfil !== 'MON' && data.perfil !== 'PF') ||
+        (data.perfil === 'PF' && !data.setor) || (data.perfil === 'MON' && data.setor)) {
+      throw new Error('Perfil de acesso inválido ou incompleto.');
+    }
+
+    return {
+      id: data.id,
+      email: authUser.email,
+      nome: data.nome,
+      perfil: data.perfil,
+      setor: data.setor
+    };
+  }
 
   function pad(n) { return String(n).padStart(2, '0'); }
   function toISO(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -94,6 +105,39 @@
     });
   }
 
+  function getNfStoragePath(value) {
+    if (typeof value !== 'string' || !value) return null;
+    if (/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(value) && value.indexOf('..') === -1) return value;
+
+    try {
+      var fileUrl = new URL(value, window.location.href);
+      if (fileUrl.origin !== new URL(SUPABASE_URL).origin) return null;
+      var marker = '/storage/v1/object/';
+      var objectIndex = fileUrl.pathname.indexOf(marker);
+      if (objectIndex === -1) return null;
+
+      var parts = fileUrl.pathname.slice(objectIndex + marker.length).split('/');
+      if (parts.length < 3 || (parts[0] !== 'public' && parts[0] !== 'sign') || parts[1] !== 'notas-fiscais') return null;
+      var path = decodeURIComponent(parts.slice(2).join('/'));
+      return path.split('/').some(function (part) { return part === '..'; }) ? null : path;
+    } catch (error) { return null; }
+  }
+
+  async function createNfSignedUrl(value) {
+    var filePath = getNfStoragePath(value);
+    if (!filePath) return '';
+
+    var { data, error } = await supabaseClient.storage
+      .from('notas-fiscais')
+      .createSignedUrl(filePath, 3600);
+
+    if (error) {
+      console.error('Não foi possível gerar acesso temporário à Nota Fiscal:', error);
+      return '';
+    }
+    return data.signedUrl;
+  }
+
   function renderViewNfBtn(r) {
     var fileLink = r.url_nf || r.fileUrl;
     if (!fileLink) return '<span class="text-xs text-slate-400">Sem anexo</span>';
@@ -103,7 +147,8 @@
     } catch (error) {
       return '<span class="text-xs text-slate-400">Anexo indisponível</span>';
     }
-    if (fileUrl.protocol !== 'https:' && fileUrl.origin !== window.location.origin) {
+    if (fileUrl.origin !== new URL(SUPABASE_URL).origin ||
+        !fileUrl.pathname.startsWith('/storage/v1/object/sign/notas-fiscais/')) {
       return '<span class="text-xs text-slate-400">Anexo indisponível</span>';
     }
     return '<a href="' + esc(fileUrl.href) + '" target="_blank" rel="noopener noreferrer" aria-label="Abrir nota fiscal em nova aba" class="inline-flex items-center gap-1.5 text-xs font-semibold text-navy-700 bg-navy-50 hover:bg-navy-100 border border-navy-200 px-2.5 py-1 rounded-md transition">' +
@@ -122,11 +167,7 @@
 
   // FETCH DATA FROM SUPABASE
   async function carregarDadosSupabase() {
-    if (!supabaseClient) {
-      toast('Configure a chave publishable do Supabase no index.html.', 'error');
-      renderAll();
-      return;
-    }
+    if (!supabaseClient || !currentUser) return;
 
     try {
       const { data, error } = await supabaseClient.from('requisicoes').select('*').order('created_at', { ascending: false });
@@ -136,39 +177,30 @@
         return;
       }
       if (data) {
-        requisicoes = data.filter(r => !r.cancelado).map(r => ({
-          id: r.codigo || r.id,
-          solicitante: r.solicitante,
-          pontoFocal: r.pontofocal,
-          setor: r.setor,
-          nf: r.numnf,
-          pedido: r.pedido_totvs || '',
-          destinacao: r.destinacao,
-          vencimento: r.vencimento,
-          urgencia: r.urgencia,
-          status: r.status,
-          arquivo: r.arquivo || 'documento.pdf',
-          fileUrl: r.url_nf || r.fileUrl,
-          criadoEm: r.created_at
+        const rows = await Promise.all(data.map(async function (r) {
+          return {
+            id: r.codigo || r.id,
+            solicitante: r.solicitante,
+            pontoFocal: r.pontofocal,
+            setor: r.setor,
+            nf: r.numnf,
+            pedido: r.pedido_totvs || '',
+            destinacao: r.destinacao,
+            vencimento: r.vencimento,
+            urgencia: r.urgencia,
+            status: r.status,
+            arquivo: r.arquivo || 'documento.pdf',
+            fileUrl: await createNfSignedUrl(r.url_nf || r.fileUrl),
+            criadoEm: r.created_at,
+            cancelado: r.cancelado,
+            excluidoPor: r.cancelado_por || 'Sistema',
+            excluidoEm: r.data_cancelamento ? new Date(r.data_cancelamento).toLocaleString('pt-BR') : '',
+            motivoExclusao: r.motivo_exclusao || ''
+          };
         }));
 
-        excluidos = data.filter(r => r.cancelado).map(r => ({
-          id: r.codigo || r.id,
-          solicitante: r.solicitante,
-          pontoFocal: r.pontofocal,
-          setor: r.setor,
-          nf: r.numnf,
-          pedido: r.pedido_totvs || '',
-          destinacao: r.destinacao,
-          vencimento: r.vencimento,
-          urgencia: r.urgencia,
-          status: r.status,
-          arquivo: r.arquivo || 'documento.pdf',
-          fileUrl: r.url_nf || r.fileUrl,
-          excluidoPor: r.cancelado_por || 'Sistema',
-          excluidoEm: r.data_cancelamento ? new Date(r.data_cancelamento).toLocaleString('pt-BR') : '',
-          motivoExclusao: r.motivo_exclusao || ''
-        }));
+        requisicoes = rows.filter(function (r) { return !r.cancelado; });
+        excluidos = rows.filter(function (r) { return r.cancelado; });
       }
     } catch (err) {
       console.error('Exceção ao carregar do Supabase:', err);
@@ -639,15 +671,17 @@
         .toLowerCase();
       const filePath = `${safeSector}/${cleanFileName}`;
 
+      const contentType = extension === 'pdf' ? 'application/pdf' :
+        (extension === 'jpg' || extension === 'jpeg') ? 'image/jpeg' :
+        extension === 'png' ? 'image/png' : '';
+      if (!contentType) throw new Error('Formato de arquivo não permitido.');
+
       const { data: uploadData, error: uploadError } = await supabaseClient.storage
         .from('notas-fiscais')
-        .upload(filePath, selectedFile);
+        .upload(filePath, selectedFile, { contentType: contentType, upsert: false });
 
       if (uploadError) throw uploadError;
       if (!uploadData) throw new Error('O Storage não confirmou o upload do arquivo.');
-
-      const { data: urlData } = supabaseClient.storage.from('notas-fiscais').getPublicUrl(filePath);
-      const publicUrl = urlData.publicUrl;
 
       const reqId = 'REQ-' + new Date().getFullYear() + '-' + Date.now();
 
@@ -661,7 +695,7 @@
         vencimento: venc,
         urgencia: urg,
         status: ST_PEND,
-        url_nf: publicUrl,
+        url_nf: filePath,
         cancelado: false
       };
 
@@ -723,23 +757,55 @@
     $('toggle-pass-icon').className = show ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
   });
 
-  $('login-form').addEventListener('submit', function (e) {
+  async function activateSession(authUser) {
+    try {
+      var profile = await loadProfile(authUser);
+      enterApp(profile);
+    } catch (error) {
+      console.error('Não foi possível carregar o perfil do usuário:', error);
+      if (supabaseClient) {
+        try {
+          var signOutResult = await supabaseClient.auth.signOut({ scope: 'local' });
+          if (signOutResult.error) console.error('Não foi possível encerrar a sessão sem perfil:', signOutResult.error);
+        } catch (signOutError) {
+          console.error('Falha ao encerrar sessão sem perfil:', signOutError);
+        }
+      }
+      clearAppState();
+      showLoginError('Conta autenticada, mas sem perfil de acesso válido. Procure o administrador.');
+    }
+  }
+
+  $('login-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     var login = $('login-user').value.trim().toLowerCase();
     var pass = $('login-pass').value;
 
-    if (!login || !pass) { showLoginError('Informe usuário e senha.'); return; }
-    
-    var u = findUser(login);
-    if (!u || pass !== u.senha) {
-      showLoginError('Usuário ou senha incorretos.');
-      $('login-pass').value = '';
-      $('login-pass').focus();
-      return;
-    }
+    if (!supabaseClient) { showLoginError('Serviço de autenticação indisponível. Tente novamente mais tarde.'); return; }
+    if (!login || !pass) { showLoginError('Informe e-mail e senha.'); return; }
+    if (!$('login-user').checkValidity()) { showLoginError('Informe um e-mail válido.'); return; }
 
-    resetLogin();
-    enterApp(u);
+    var loginButton = $('login-btn');
+    loginButton.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email: login, password: pass });
+      if (error || !data.user) {
+        if (error) console.error('Falha de autenticação no Supabase:', error);
+        showLoginError('E-mail ou senha incorretos.');
+        $('login-pass').value = '';
+        $('login-pass').focus();
+        return;
+      }
+
+      resetLogin();
+      await activateSession(data.user);
+    } catch (error) {
+      console.error('Erro ao autenticar no Supabase:', error);
+      showLoginError('Não foi possível autenticar. Verifique sua conexão e tente novamente.');
+      $('login-pass').value = '';
+    } finally {
+      loginButton.disabled = false;
+    }
   });
 
   function enterApp(u) {
@@ -752,20 +818,71 @@
     $('user-name').textContent = u.nome;
     $('user-role').textContent = u.perfil === 'MON' ? 'MON · Comprador' : 'PF · ' + u.setor;
 
+    if (u.perfil === 'PF') {
+      $('pontofocal').value = pfLabel(u);
+      $('setor').value = u.setor;
+    }
     switchTab('main');
     carregarDadosSupabase();
     toast('Bem-vindo(a), ' + u.nome + '!', 'success');
   }
 
-  function logoff() {
+  function clearAppState() {
     currentUser = null;
+    requisicoes = [];
+    excluidos = [];
+    closeDeleteModal();
     resetForm();
     $('app-header').classList.add('hidden');
     $('app-main').classList.add('hidden');
     $('login-screen').classList.remove('hidden');
+  }
+
+  async function logoff() {
+    if (supabaseClient) {
+      try {
+        const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
+        if (error) throw error;
+      } catch (error) {
+        console.error('Erro ao encerrar sessão no Supabase:', error);
+        toast('Não foi possível encerrar a sessão. Tente novamente.', 'error');
+        return;
+      }
+    }
+    clearAppState();
     resetLogin();
   }
   $('logout-btn').addEventListener('click', logoff);
+
+  async function restoreSession() {
+    if (!supabaseClient) {
+      showLoginError('Serviço de autenticação indisponível. Verifique a configuração do Supabase.');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        console.error('Não foi possível restaurar a sessão do Supabase:', error);
+        showLoginError('Não foi possível verificar sua sessão. Faça login novamente.');
+        return;
+      }
+      if (data.session) await activateSession(data.session.user);
+    } catch (error) {
+      console.error('Erro ao restaurar sessão do Supabase:', error);
+      showLoginError('Não foi possível verificar sua sessão. Faça login novamente.');
+    }
+  }
+
+  if (supabaseClient) {
+    supabaseClient.auth.onAuthStateChange(function (event) {
+      if (event === 'SIGNED_OUT') {
+        clearAppState();
+        resetLogin();
+      }
+    });
+  }
+  restoreSession();
 
   $('reset-btn').addEventListener('click', function () {
     carregarDadosSupabase();
