@@ -409,6 +409,7 @@
             '<p class="text-slate-500"><i class="fa-solid fa-user-xmark mr-1"></i>Excluído por: <strong class="text-slate-700">' + esc(r.excluidoPor) + '</strong></p>' +
             '<p class="text-slate-500"><i class="fa-regular fa-clock mr-1"></i>Data: <strong class="text-slate-700">' + esc(r.excluidoEm) + '</strong></p>' +
             '<div class="pt-2">' + renderViewNfBtn(r) + '</div>' +
+            (currentUser.perfil === 'MON' ? '<button type="button" class="btn-permanent-delete mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-md transition" data-permanent-delete-id="' + esc(r.id) + '"><i class="fa-solid fa-trash-can"></i> Excluir permanentemente</button>' : '') +
           '</div>' +
         '</div>' +
       '</article>';
@@ -484,7 +485,43 @@
       var id = btn.getAttribute('data-del-id');
       if (id) openDeleteModal(id);
     }
+
+    var permanentDeleteButton = e.target.closest('.btn-permanent-delete');
+    if (permanentDeleteButton) {
+      permanentlyDeleteRequest(permanentDeleteButton.getAttribute('data-permanent-delete-id'), permanentDeleteButton);
+    }
   });
+
+  async function permanentlyDeleteRequest(id, button) {
+    if (!currentUser || currentUser.perfil !== 'MON') {
+      toast('Apenas compradores podem excluir requisições permanentemente.', 'error');
+      return;
+    }
+    var request = excluidos.find(function (item) { return item.id === id; });
+    if (!request) {
+      toast('A requisição não foi encontrada no histórico.', 'error');
+      return;
+    }
+    if (!window.confirm('Excluir permanentemente a requisição ' + id + ', incluindo o arquivo da Nota Fiscal? Esta ação não pode ser desfeita.')) return;
+
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Excluindo...';
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('admin-users', {
+        body: { action: 'permanently-delete-request', codigo: id }
+      });
+      if (error) throw error;
+      if (!data || !data.success) throw new Error('A função administrativa não confirmou a exclusão.');
+
+      toast('Requisição e arquivo excluídos permanentemente.', 'success');
+      await carregarDadosSupabase();
+    } catch (error) {
+      console.error('Não foi possível excluir permanentemente a requisição:', error);
+      toast(await getAdminFunctionError(error), 'error');
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-trash-can"></i> Excluir permanentemente';
+    }
+  }
 
   function isMon() { return currentUser && currentUser.perfil === 'MON'; }
 
@@ -813,7 +850,7 @@
     if (!currentUser || currentUser.perfil !== 'ADMIN') return;
 
     var body = $('admin-users-body');
-    body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Carregando usuários...</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Carregando usuários...</td></tr>';
     $('admin-users-empty').classList.add('hidden');
 
     try {
@@ -836,6 +873,10 @@
           '<td class="px-4 py-3">' + esc(role) + '</td>' +
           '<td class="px-4 py-3">' + esc(user.setor || '—') + '</td>' +
           '<td class="px-4 py-3 whitespace-nowrap">' + esc(createdAt) + '</td>' +
+          '<td class="px-4 py-3 text-right whitespace-nowrap">' +
+            (user.id === currentUser.id ? '<span class="text-xs text-slate-400">Sessão atual</span>' :
+              '<button type="button" class="btn-admin-delete rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition" data-admin-delete-id="' + esc(user.id) + '" data-admin-delete-label="' + esc((user.nome || user.email || 'usuário')) + '"><i class="fa-solid fa-trash-can mr-1"></i>Excluir conta</button>') +
+          '</td>' +
           '</tr>';
       }).join('');
     } catch (error) {
@@ -844,6 +885,37 @@
       toast('Falha ao carregar usuários: ' + await getAdminFunctionError(error), 'error');
     }
   }
+
+  $('admin-users-body').addEventListener('click', async function (e) {
+    var button = e.target.closest('.btn-admin-delete');
+    if (!button) return;
+    if (!currentUser || currentUser.perfil !== 'ADMIN') {
+      toast('Apenas o administrador pode excluir contas.', 'error');
+      return;
+    }
+
+    var userId = button.getAttribute('data-admin-delete-id');
+    var userLabel = button.getAttribute('data-admin-delete-label');
+    if (!userId || !window.confirm('Excluir a conta de ' + userLabel + '? A pessoa perderá o acesso ao sistema.')) return;
+
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('admin-users', {
+        body: { action: 'delete-user', user_id: userId }
+      });
+      if (error) throw error;
+      if (!data || !data.success) throw new Error('A função administrativa não confirmou a exclusão.');
+
+      toast('Conta excluída com sucesso.', 'success');
+      await loadAdminUsers();
+    } catch (error) {
+      console.error('Não foi possível excluir a conta:', error);
+      toast(await getAdminFunctionError(error), 'error');
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-trash-can mr-1"></i>Excluir conta';
+    }
+  });
 
   async function getAdminFunctionError(error) {
     if (error && error.context && typeof error.context.clone === 'function') {
