@@ -128,18 +128,33 @@ Deno.serve(async (request) => {
       }
     }
 
-    const { data: deletedRequest, error: deleteRequestError } = await adminClient
+    const { data: deletedRequests, error: deleteRequestError } = await adminClient
       .from("requisicoes")
       .delete()
       .eq("codigo", codigo)
       .eq("cancelado", true)
-      .select("codigo")
-      .maybeSingle();
+      .select("codigo");
     if (deleteRequestError) {
       console.error("Falha ao excluir requisição cancelada:", deleteRequestError);
       return jsonResponse({ error: "O arquivo foi removido, mas não foi possível excluir o registro da requisição." }, 500);
     }
-    if (!deletedRequest) return jsonResponse({ error: "A requisição não está mais disponível para exclusão." }, 404);
+    if (!deletedRequests || deletedRequests.length === 0) {
+      return jsonResponse({ error: "Nenhuma linha cancelada foi removida da tabela de requisições." }, 404);
+    }
+
+    const { data: remainingRequests, error: verifyDeleteError } = await adminClient
+      .from("requisicoes")
+      .select("codigo")
+      .eq("codigo", codigo)
+      .limit(1);
+    if (verifyDeleteError) {
+      console.error("Falha ao confirmar a exclusão da requisição:", verifyDeleteError);
+      return jsonResponse({ error: "A exclusão foi solicitada, mas não foi possível confirmar se o registro saiu da tabela." }, 500);
+    }
+    if (remainingRequests && remainingRequests.length > 0) {
+      console.error("A requisição permanece na tabela após a exclusão:", codigo);
+      return jsonResponse({ error: "A requisição ainda consta na tabela do banco de dados e não foi excluída." }, 500);
+    }
 
     return jsonResponse({ success: true });
   }
