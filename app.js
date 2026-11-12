@@ -64,6 +64,35 @@
 
   function $(id) { return document.getElementById(id); }
 
+  function updateThemeToggle(button, isDark) {
+    button.setAttribute('aria-label', isDark ? 'Ativar modo claro' : 'Ativar modo escuro');
+    button.title = isDark ? 'Ativar modo claro' : 'Ativar modo escuro';
+    button.innerHTML = '<i class="fa-solid ' + (isDark ? 'fa-sun' : 'fa-moon') + '" aria-hidden="true"></i><span>Modo ' + (isDark ? 'claro' : 'escuro') + '</span>';
+  }
+
+  function setTheme(isDark) {
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    document.querySelectorAll('.theme-toggle').forEach(function (button) {
+      updateThemeToggle(button, isDark);
+    });
+    try {
+      localStorage.setItem('portal-theme', isDark ? 'dark' : 'light');
+    } catch (error) {
+      console.warn('Não foi possível salvar a preferência de tema neste navegador:', error);
+    }
+  }
+
+  var isDarkTheme = document.documentElement.classList.contains('dark');
+  document.querySelectorAll('.theme-toggle').forEach(function (button) {
+    updateThemeToggle(button, isDarkTheme);
+    button.addEventListener('click', function () {
+      isDarkTheme = !document.documentElement.classList.contains('dark');
+      setTheme(isDarkTheme);
+    });
+  });
+  document.documentElement.style.colorScheme = isDarkTheme ? 'dark' : 'light';
+
   function statusBadge(st) {
     if (st === ST_PEND) return '<span class="inline-flex items-center gap-1.5 bg-slate-200 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-clock"></i>Pendente</span>';
     if (st === ST_DONE) return '<span class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-circle-check"></i>Concluído</span>';
